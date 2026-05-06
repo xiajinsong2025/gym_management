@@ -1,0 +1,73 @@
+# ==============================
+# macOS 系统文件（必加）
+# ==============================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ==============================
+# Python / FastAPI / SQLAlchemy
+# ==============================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# 编辑器 / 工具
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 日志文件
+logs/
+*.log
+
+# 环境变量 / 配置文件（非常重要！不能上传）
+.env
+.env.*
+!.env.example
+
+# 测试 / 缓存
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ==============================
+# Alembic 数据库迁移
+# ==============================
+# 只忽略 Alembic 生成的日志/缓存，不忽略版本文件！
+alembic/logs/
+alembic.ini.example
+
+# ==============================
+# Vue3 前端
+# ==============================
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Vue 编辑器 / 缓存
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 前端环境变量
+.env
+.env.local
+.env.*.local
