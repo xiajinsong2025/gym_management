@@ -1,59 +1,49 @@
 import axios from 'axios'
-import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { useAuthStore } from '@/stores/auth'
+import type { AxiosRequestConfig } from 'axios'
+import { ElMessage } from 'element-plus'
 import router from '@/router'
+import { useAuthStore } from '@/stores/auth'
+import type { ApiResponse } from '@/types'
 
-const api: AxiosInstance = axios.create({
+const api = axios.create({
   baseURL: '/api/v1',
   timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
 })
 
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
   }
-)
+  return config
+})
 
 api.interceptors.response.use(
-  (response) => {
-    return response.data
-  },
+  (response) => response.data,
   (error) => {
-    if (error.response?.status === 401) {
-      const authStore = useAuthStore()
-      authStore.logout()
+    const status = error?.response?.status as number | undefined
+    if (status === 401) {
+      const auth = useAuthStore()
+      auth.logout()
       router.push('/login')
     }
-    return Promise.reject(error.response?.data || error)
+    const message = error?.response?.data?.message ?? error?.message ?? '请求失败'
+    ElMessage.error(message)
+    return Promise.reject(error?.response?.data ?? error)
   }
 )
 
-export default api
-
 export const request = {
-  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  get<T>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return api.get(url, config)
   },
-  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return api.post(url, data, config)
   },
-  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return api.put(url, data, config)
   },
-  patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return api.patch(url, data, config)
   },
-  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return api.delete(url, config)
-  }
 }

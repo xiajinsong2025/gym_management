@@ -1,29 +1,15 @@
 import { request } from './request'
-import type { ApiResponse, PageResponse, Member, MemberCreate, MemberUpdate } from '@/types'
+import type { Member, MemberCreate, MemberUpdate, PageResponse } from '@/types'
 
 export const memberApi = {
-  list(params: {
-    keyword?: string
-    status?: string
-    page?: number
-    page_size?: number
-  }): Promise<ApiResponse<PageResponse<Member>>> {
-    return request.get('/members', { params })
+  list(params?: { keyword?: string; status?: string; page?: number; page_size?: number }) {
+    return request.get<PageResponse<Member>>('/members', { params })
   },
-
-  get(id: number): Promise<ApiResponse<Member>> {
-    return request.get(`/members/${id}`)
+  create(data: MemberCreate) {
+    return request.post<Member>('/members', data)
   },
-
-  create(data: MemberCreate): Promise<ApiResponse<Member>> {
-    return request.post('/members', data)
+  update(id: number, data: MemberUpdate) {
+    return request.patch<Member>(`/members/${id}`, data)
   },
-
-  update(id: number, data: MemberUpdate): Promise<ApiResponse<Member>> {
-    return request.patch(`/members/${id}`, data)
-  },
-
-  delete(id: number): Promise<ApiResponse<void>> {
-    return request.delete(`/members/${id}`)
-  }
 }
+

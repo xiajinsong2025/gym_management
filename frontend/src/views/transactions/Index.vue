@@ -1,226 +1,81 @@
 <template>
-  <div>
-    <v-card>
-      <v-card-title>
-        <h2>卡务交易</h2>
-      </v-card-title>
-      <v-card-text>
-        <v-tabs v-model="activeTab">
-          <v-tab value="cardTypes">卡种管理</v-tab>
-          <v-tab value="memberCards">会员卡管理</v-tab>
-          <v-tab value="transactions">交易记录</v-tab>
-        </v-tabs>
-
-        <v-window v-model="activeTab" class="mt-4">
-          <v-window-item value="cardTypes">
-            <v-card flat>
-              <v-card-text>
-                <v-btn color="primary" class="mb-4">
-                  <v-icon left>mdi-plus</v-icon>
-                  新增卡种
-                </v-btn>
-                <v-data-table
-                  :headers="cardTypeHeaders"
-                  :items="cardTypes"
-                  :loading="loading"
-                  hide-default-footer
-                >
-                  <template v-slot:item.kind="{ item }">
-                    <v-chip small>{{ getCardKindText(item.kind) }}</v-chip>
-                  </template>
-                  <template v-slot:item.price_cents="{ item }">
-                    ¥{{ (item.price_cents / 100).toFixed(2) }}
-                  </template>
-                  <template v-slot:item.is_active="{ item }">
-                    <v-chip :color="item.is_active ? 'success' : 'grey'" small>
-                      {{ item.is_active ? '启用' : '禁用' }}
-                    </v-chip>
-                  </template>
-                </v-data-table>
-              </v-card-text>
-            </v-card>
-          </v-window-item>
-
-          <v-window-item value="memberCards">
-            <v-card flat>
-              <v-card-text>
-                <v-btn color="primary" class="mb-4">
-                  <v-icon left>mdi-plus</v-icon>
-                  开卡
-                </v-btn>
-                <v-data-table
-                  :headers="memberCardHeaders"
-                  :items="memberCards"
-                  :loading="loading"
-                  hide-default-footer
-                >
-                  <template v-slot:item.status="{ item }">
-                    <v-chip :color="getCardStatusColor(item.status)" small>
-                      {{ getCardStatusText(item.status) }}
-                    </v-chip>
-                  </template>
-                  <template v-slot:item.balance_cents="{ item }">
-                    ¥{{ ((item.balance_cents || 0) / 100).toFixed(2) }}
-                  </template>
-                </v-data-table>
-              </v-card-text>
-            </v-card>
-          </v-window-item>
-
-          <v-window-item value="transactions">
-            <v-card flat>
-              <v-card-text>
-                <v-data-table
-                  :headers="transactionHeaders"
-                  :items="transactions"
-                  :loading="loading"
-                  hide-default-footer
-                >
-                  <template v-slot:item.transaction_type="{ item }">
-                    <v-chip small>{{ getTransactionTypeText(item.transaction_type) }}</v-chip>
-                  </template>
-                  <template v-slot:item.amount_cents="{ item }">
-                    ¥{{ (item.amount_cents / 100).toFixed(2) }}
-                  </template>
-                </v-data-table>
-              </v-card-text>
-            </v-card>
-          </v-window-item>
-        </v-window>
-      </v-card-text>
-    </v-card>
-
-    <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="3000">
-      {{ snackbarText }}
-    </v-snackbar>
+  <div class="page-card">
+    <div class="page-header">
+      <div class="page-title">卡务交易</div>
+      <el-button type="primary" @click="dialog = true">新增卡种</el-button>
+    </div>
+    <div class="table-wrap">
+      <el-tabs v-model="tab">
+        <el-tab-pane label="卡种" name="types">
+          <el-table :data="cardTypes" border v-loading="loading">
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="name" label="名称" />
+            <el-table-column prop="kind" label="类型" />
+            <el-table-column prop="price_cents" label="价格(分)" />
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="会员卡" name="cards">
+          <el-table :data="cards" border v-loading="loading">
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="member_id" label="会员ID" />
+            <el-table-column prop="card_no" label="卡号" />
+            <el-table-column prop="status" label="状态" />
+            <el-table-column prop="balance_cents" label="余额(分)" />
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
+    </div>
   </div>
+
+  <el-dialog v-model="dialog" title="新增卡种" width="520">
+    <el-form :model="newType" label-position="top">
+      <el-form-item label="名称"><el-input v-model="newType.name" /></el-form-item>
+      <el-form-item label="类型"><el-select v-model="newType.kind"><el-option v-for="k in kinds" :key="k" :label="k" :value="k" /></el-select></el-form-item>
+      <el-form-item label="价格(分)"><el-input-number v-model="newType.price_cents" :min="0" style="width: 100%" /></el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="dialog = false">取消</el-button>
+      <el-button type="primary" :loading="saving" @click="createType">保存</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import type { CardType, MemberCard } from '@/types'
+import { onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { transactionApi } from '@/api/business'
+import type { CardKind, CardType, MemberCard } from '@/types'
 
+const tab = ref('types')
+const dialog = ref(false)
 const loading = ref(false)
-const activeTab = ref('cardTypes')
+const saving = ref(false)
 const cardTypes = ref<CardType[]>([])
-const memberCards = ref<MemberCard[]>([])
-const transactions = ref<any[]>([])
+const cards = ref<MemberCard[]>([])
+const kinds: CardKind[] = ['time', 'times', 'stored_value', 'personal_training']
+const newType = reactive({ name: '', kind: 'stored_value' as CardKind, price_cents: 0 })
 
-const snackbar = ref(false)
-const snackbarText = ref('')
-const snackbarColor = ref('success')
-
-const cardTypeHeaders = [
-  { title: 'ID', key: 'id' },
-  { title: '卡种名称', key: 'name' },
-  { title: '类型', key: 'kind' },
-  { title: '价格', key: 'price_cents' },
-  { title: '有效期(天)', key: 'validity_days' },
-  { title: '次数', key: 'total_times' },
-  { title: '状态', key: 'is_active' }
-]
-
-const memberCardHeaders = [
-  { title: 'ID', key: 'id' },
-  { title: '卡号', key: 'card_no' },
-  { title: '类型', key: 'kind' },
-  { title: '状态', key: 'status' },
-  { title: '开始日期', key: 'start_date' },
-  { title: '结束日期', key: 'end_date' },
-  { title: '剩余次数', key: 'remaining_times' },
-  { title: '余额', key: 'balance_cents' }
-]
-
-const transactionHeaders = [
-  { title: 'ID', key: 'id' },
-  { title: '交易类型', key: 'transaction_type' },
-  { title: '金额', key: 'amount_cents' },
-  { title: '次数变更', key: 'times_delta' },
-  { title: '备注', key: 'note' },
-  { title: '创建时间', key: 'created_at' }
-]
-
-function showSnackbar(text: string, color: string = 'success') {
-  snackbarText.value = text
-  snackbarColor.value = color
-  snackbar.value = true
-}
-
-function getCardKindText(kind: string) {
-  const kindMap: Record<string, string> = {
-    time: '时间卡',
-    times: '次卡',
-    stored_value: '储值卡',
-    personal_training: '私教卡'
-  }
-  return kindMap[kind] || kind
-}
-
-function getCardStatusText(status: string) {
-  const statusMap: Record<string, string> = {
-    active: '正常',
-    frozen: '冻结',
-    expired: '过期',
-    refunded: '已退卡'
-  }
-  return statusMap[status] || status
-}
-
-function getCardStatusColor(status: string) {
-  const colorMap: Record<string, string> = {
-    active: 'success',
-    frozen: 'warning',
-    expired: 'error',
-    refunded: 'grey'
-  }
-  return colorMap[status] || 'primary'
-}
-
-function getTransactionTypeText(type: string) {
-  const typeMap: Record<string, string> = {
-    open: '开卡',
-    renew: '续费',
-    recharge: '充值',
-    consume: '消费',
-    freeze: '冻结',
-    unfreeze: '解冻',
-    refund: '退卡',
-    transfer: '转卡'
-  }
-  return typeMap[type] || type
-}
-
-async function loadData() {
+async function load() {
   loading.value = true
   try {
-    // TODO: Implement API calls
-    // For now, use mock data
-    cardTypes.value = [
-      {
-        id: 1,
-        name: '年卡',
-        kind: 'time',
-        price_cents: 299900,
-        validity_days: 365,
-        is_active: true
-      },
-      {
-        id: 2,
-        name: '次卡(30次)',
-        kind: 'times',
-        price_cents: 199900,
-        total_times: 30,
-        is_active: true
-      }
-    ]
-  } catch (error: any) {
-    showSnackbar(error.message || '加载数据失败', 'error')
+    const [types, memberCards] = await Promise.all([transactionApi.listCardTypes(), transactionApi.listMemberCards()])
+    cardTypes.value = types.data.items
+    cards.value = memberCards.data.items
   } finally {
     loading.value = false
   }
 }
-
-onMounted(() => {
-  loadData()
-})
+async function createType() {
+  saving.value = true
+  try {
+    await transactionApi.createCardType(newType)
+    ElMessage.success('新增成功')
+    dialog.value = false
+    Object.assign(newType, { name: '', kind: 'stored_value', price_cents: 0 })
+    await load()
+  } finally {
+    saving.value = false
+  }
+}
+onMounted(load)
 </script>

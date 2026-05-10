@@ -1,142 +1,44 @@
 <template>
-  <v-container fluid fill-height class="login-container">
-    <v-row align="center" justify="center">
-      <v-col cols="12" sm="8" md="4">
-        <v-card class="elevation-12">
-          <v-toolbar dark color="primary">
-            <v-toolbar-title>健身房管理系统 - 注册</v-toolbar-title>
-          </v-toolbar>
-          <v-card-text>
-            <v-form ref="form" v-model="valid" @submit.prevent="handleRegister">
-              <v-text-field
-                v-model="form.username"
-                prepend-icon="mdi-account"
-                name="username"
-                label="用户名 *"
-                type="text"
-                :rules="[rules.required, rules.minLength]"
-                :error-messages="errors.username"
-              ></v-text-field>
-              <v-text-field
-                v-model="form.display_name"
-                prepend-icon="mdi-account-circle"
-                name="display_name"
-                label="显示名称 *"
-                type="text"
-                :rules="[rules.required]"
-              ></v-text-field>
-              <v-text-field
-                v-model="form.password"
-                prepend-icon="mdi-lock"
-                name="password"
-                label="密码 *"
-                type="password"
-                :rules="[rules.required, rules.passwordLength]"
-                :error-messages="errors.password"
-              ></v-text-field>
-              <v-text-field
-                v-model="form.confirmPassword"
-                prepend-icon="mdi-lock-check"
-                name="confirmPassword"
-                label="确认密码 *"
-                type="password"
-                :rules="[rules.required, rules.passwordMatch]"
-              ></v-text-field>
-              <v-alert v-if="errorMessage" type="error" class="mt-3">
-                {{ errorMessage }}
-              </v-alert>
-              <v-alert v-if="successMessage" type="success" class="mt-3">
-                {{ successMessage }}
-              </v-alert>
-            </v-form>
-          </v-card-text>
-          <v-card-actions>
-            <v-btn text @click="goToLogin">返回登录</v-btn>
-            <v-spacer></v-spacer>
-            <v-btn
-              color="primary"
-              :loading="loading"
-              :disabled="!valid"
-              @click="handleRegister"
-            >
-              注册
-            </v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-col>
-    </v-row>
-  </v-container>
+  <div style="height: 100%; display: grid; place-items: center; background: #f2f5fb">
+    <el-card style="width: 420px">
+      <template #header><div style="font-weight: 600">注册账号</div></template>
+      <el-form :model="form" label-position="top">
+        <el-form-item label="用户名"><el-input v-model="form.username" /></el-form-item>
+        <el-form-item label="显示名"><el-input v-model="form.display_name" /></el-form-item>
+        <el-form-item label="密码"><el-input v-model="form.password" show-password /></el-form-item>
+      </el-form>
+      <el-alert v-if="message" :title="message" :type="ok ? 'success' : 'error'" show-icon :closable="false" />
+      <div style="display: flex; justify-content: space-between; margin-top: 16px">
+        <el-button link @click="router.push('/login')">返回登录</el-button>
+        <el-button type="primary" :loading="loading" @click="submit">注册</el-button>
+      </div>
+    </el-card>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 
 const router = useRouter()
-
-const form = reactive({
-  username: '',
-  display_name: '',
-  password: '',
-  confirmPassword: ''
-})
-
-const valid = ref(false)
 const loading = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
-const formRef = ref()
+const ok = ref(false)
+const message = ref('')
+const form = reactive({ username: '', display_name: '', password: '' })
 
-const errors = reactive({
-  username: '',
-  password: ''
-})
-
-const rules = {
-  required: (value: string) => !!value || '此字段为必填项',
-  minLength: (value: string) => value.length >= 3 || '用户名至少3个字符',
-  passwordLength: (value: string) => value.length >= 6 || '密码至少6个字符',
-  passwordMatch: (value: string) => value === form.password || '两次密码不一致'
-}
-
-async function handleRegister() {
-  if (!valid.value) return
-
+async function submit() {
   loading.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
-
+  message.value = ''
   try {
-    const response = await authApi.register({
-      username: form.username,
-      password: form.password,
-      display_name: form.display_name
-    })
-
-    if (response.code === 0) {
-      successMessage.value = '注册成功！3秒后跳转到登录页面...'
-      setTimeout(() => {
-        router.push('/login')
-      }, 3000)
-    } else {
-      errorMessage.value = response.message || '注册失败'
-    }
-  } catch (error: any) {
-    errorMessage.value = error.message || '注册失败，请检查网络连接'
+    await authApi.register(form)
+    ok.value = true
+    message.value = '注册成功，请返回登录'
+  } catch (e: any) {
+    ok.value = false
+    message.value = e?.message ?? e?.detail ?? '注册失败'
   } finally {
     loading.value = false
   }
 }
-
-function goToLogin() {
-  router.push('/login')
-}
 </script>
-
-<style scoped>
-.login-container {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-}
-</style>

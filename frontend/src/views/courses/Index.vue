@@ -1,210 +1,79 @@
 <template>
-  <div>
-    <v-card>
-      <v-card-title>
-        <h2>课程管理</h2>
-      </v-card-title>
-      <v-card-text>
-        <v-tabs v-model="activeTab">
-          <v-tab value="courses">课程列表</v-tab>
-          <v-tab value="schedules">排期管理</v-tab>
-          <v-tab value="bookings">预约记录</v-tab>
-        </v-tabs>
-
-        <v-window v-model="activeTab" class="mt-4">
-          <v-window-item value="courses">
-            <v-card flat>
-              <v-card-text>
-                <v-btn color="primary" class="mb-4">
-                  <v-icon left>mdi-plus</v-icon>
-                  新增课程
-                </v-btn>
-                <v-data-table
-                  :headers="courseHeaders"
-                  :items="courses"
-                  :loading="loading"
-                  hide-default-footer
-                >
-                  <template v-slot:item.default_capacity="{ item }">
-                    <v-chip color="info" small>{{ item.default_capacity }}人</v-chip>
-                  </template>
-                  <template v-slot:item.duration_minutes="{ item }">
-                    {{ item.duration_minutes }}分钟
-                  </template>
-                </v-data-table>
-              </v-card-text>
-            </v-card>
-          </v-window-item>
-
-          <v-window-item value="schedules">
-            <v-card flat>
-              <v-card-text>
-                <v-btn color="primary" class="mb-4">
-                  <v-icon left>mdi-plus</v-icon>
-                  新增排期
-                </v-btn>
-                <v-data-table
-                  :headers="scheduleHeaders"
-                  :items="schedules"
-                  :loading="loading"
-                  hide-default-footer
-                >
-                  <template v-slot:item.status="{ item }">
-                    <v-chip :color="getScheduleStatusColor(item.status)" small>
-                      {{ getScheduleStatusText(item.status) }}
-                    </v-chip>
-                  </template>
-                  <template v-slot:item.capacity="{ item }">
-                    {{ item.booked_count }}/{{ item.capacity }}
-                    <v-chip v-if="item.waitlisted_count > 0" color="warning" x-small class="ml-1">
-                      候补{{ item.waitlisted_count }}
-                    </v-chip>
-                  </template>
-                </v-data-table>
-              </v-card-text>
-            </v-card>
-          </v-window-item>
-
-          <v-window-item value="bookings">
-            <v-card flat>
-              <v-card-text>
-                <v-data-table
-                  :headers="bookingHeaders"
-                  :items="bookings"
-                  :loading="loading"
-                  hide-default-footer
-                >
-                  <template v-slot:item.status="{ item }">
-                    <v-chip :color="getBookingStatusColor(item.status)" small>
-                      {{ getBookingStatusText(item.status) }}
-                    </v-chip>
-                  </template>
-                </v-data-table>
-              </v-card-text>
-            </v-card>
-          </v-window-item>
-        </v-window>
-      </v-card-text>
-    </v-card>
-
-    <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="3000">
-      {{ snackbarText }}
-    </v-snackbar>
+  <div class="page-card">
+    <div class="page-header">
+      <div class="page-title">课程管理</div>
+      <el-button type="primary" @click="dialog = true">新增课程</el-button>
+    </div>
+    <div class="table-wrap">
+      <el-tabs v-model="tab">
+        <el-tab-pane label="课程" name="courses">
+          <el-table :data="courses" border v-loading="loading">
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="name" label="名称" />
+            <el-table-column prop="default_capacity" label="容量" />
+            <el-table-column prop="duration_minutes" label="时长(分)" />
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="排期" name="schedules">
+          <el-table :data="schedules" border v-loading="loading">
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="course_id" label="课程ID" />
+            <el-table-column prop="start_time" label="开始时间" />
+            <el-table-column prop="status" label="状态" />
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
+    </div>
   </div>
+
+  <el-dialog v-model="dialog" title="新增课程" width="520">
+    <el-form :model="newCourse" label-position="top">
+      <el-form-item label="名称"><el-input v-model="newCourse.name" /></el-form-item>
+      <el-form-item label="默认容量"><el-input-number v-model="newCourse.default_capacity" :min="0" style="width: 100%" /></el-form-item>
+      <el-form-item label="时长(分)"><el-input-number v-model="newCourse.duration_minutes" :min="1" style="width: 100%" /></el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="dialog = false">取消</el-button>
+      <el-button type="primary" :loading="saving" @click="createCourse">保存</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { courseApi } from '@/api/business'
 import type { Course, CourseSchedule } from '@/types'
 
+const tab = ref('courses')
+const dialog = ref(false)
 const loading = ref(false)
-const activeTab = ref('courses')
+const saving = ref(false)
 const courses = ref<Course[]>([])
 const schedules = ref<CourseSchedule[]>([])
-const bookings = ref<any[]>([])
+const newCourse = reactive({ name: '', default_capacity: 20, duration_minutes: 60 })
 
-const snackbar = ref(false)
-const snackbarText = ref('')
-const snackbarColor = ref('success')
-
-const courseHeaders = [
-  { title: 'ID', key: 'id' },
-  { title: '课程名称', key: 'name' },
-  { title: '默认容量', key: 'default_capacity' },
-  { title: '时长', key: 'duration_minutes' },
-  { title: '描述', key: 'description' }
-]
-
-const scheduleHeaders = [
-  { title: 'ID', key: 'id' },
-  { title: '课程ID', key: 'course_id' },
-  { title: '开始时间', key: 'start_time' },
-  { title: '结束时间', key: 'end_time' },
-  { title: '预约情况', key: 'capacity' },
-  { title: '状态', key: 'status' }
-]
-
-const bookingHeaders = [
-  { title: 'ID', key: 'id' },
-  { title: '排期ID', key: 'schedule_id' },
-  { title: '会员ID', key: 'member_id' },
-  { title: '状态', key: 'status' },
-  { title: '预约时间', key: 'created_at' }
-]
-
-function showSnackbar(text: string, color: string = 'success') {
-  snackbarText.value = text
-  snackbarColor.value = color
-  snackbar.value = true
-}
-
-function getScheduleStatusText(status: string) {
-  const statusMap: Record<string, string> = {
-    scheduled: '已排期',
-    cancelled: '已取消',
-    finished: '已完成'
-  }
-  return statusMap[status] || status
-}
-
-function getScheduleStatusColor(status: string) {
-  const colorMap: Record<string, string> = {
-    scheduled: 'primary',
-    cancelled: 'error',
-    finished: 'success'
-  }
-  return colorMap[status] || 'grey'
-}
-
-function getBookingStatusText(status: string) {
-  const statusMap: Record<string, string> = {
-    booked: '已预约',
-    cancelled: '已取消',
-    attended: '已签到',
-    waitlisted: '候补中'
-  }
-  return statusMap[status] || status
-}
-
-function getBookingStatusColor(status: string) {
-  const colorMap: Record<string, string> = {
-    booked: 'primary',
-    cancelled: 'error',
-    attended: 'success',
-    waitlisted: 'warning'
-  }
-  return colorMap[status] || 'grey'
-}
-
-async function loadData() {
+async function load() {
   loading.value = true
   try {
-    // TODO: Implement API calls
-    // Mock data
-    courses.value = [
-      {
-        id: 1,
-        name: '瑜伽课',
-        default_capacity: 20,
-        duration_minutes: 60,
-        description: '基础瑜伽课程'
-      },
-      {
-        id: 2,
-        name: '动感单车',
-        default_capacity: 30,
-        duration_minutes: 45,
-        description: '高强度有氧训练'
-      }
-    ]
-  } catch (error: any) {
-    showSnackbar(error.message || '加载数据失败', 'error')
+    const [courseRes, scheduleRes] = await Promise.all([courseApi.listCourses(), courseApi.listSchedules()])
+    courses.value = courseRes.data.items
+    schedules.value = scheduleRes.data.items
   } finally {
     loading.value = false
   }
 }
-
-onMounted(() => {
-  loadData()
-})
+async function createCourse() {
+  saving.value = true
+  try {
+    await courseApi.createCourse(newCourse)
+    ElMessage.success('新增成功')
+    dialog.value = false
+    Object.assign(newCourse, { name: '', default_capacity: 20, duration_minutes: 60 })
+    await load()
+  } finally {
+    saving.value = false
+  }
+}
+onMounted(load)
 </script>
