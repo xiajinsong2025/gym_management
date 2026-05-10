@@ -7,6 +7,7 @@ from app.api.v1.members import router as members_router
 from app.api.v1.marketing import router as marketing_router
 from app.api.v1.personal_training import router as personal_training_router
 from app.api.v1.reports import router as reports_router
+from app.api.v1.system import router as system_router
 from app.api.v1.transactions import router as transactions_router
 
 api_router = APIRouter()
@@ -25,3 +26,4 @@ api_router.include_router(personal_training_router)
 api_router.include_router(front_desk_router)
 api_router.include_router(reports_router)
 api_router.include_router(marketing_router)
+api_router.include_router(system_router)

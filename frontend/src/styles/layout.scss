@@ -7,9 +7,48 @@
 }
 
 .app-side {
-  background: var(--side-bg);
-  color: var(--side-text);
-  border-right: 1px solid #0b1220;
+  background: #0f172a;
+  color: #cbd5e1;
+  border-right: 1px solid #111827;
+}
+
+.brand {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid #1f2937;
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.brand-sub {
+  color: #94a3b8;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.menu-scroll {
+  height: calc(100vh - 64px);
 }
 
 .app-main {
@@ -26,6 +65,30 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.tabs-bar {
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tab-pill {
+  margin: 0 8px 4px 0;
+  cursor: pointer;
 }
 
 .content-wrap {
