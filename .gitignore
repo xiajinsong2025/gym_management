@@ -32,7 +32,7 @@ venv.bak/
 *~
 
 # 日志文件
-logs/
+/logs/
 *.log
 
 # PID 文件
