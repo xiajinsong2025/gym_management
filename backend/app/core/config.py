@@ -1,16 +1,18 @@
+import os
+from dataclasses import dataclass
 from functools import lru_cache
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
-class Settings(BaseSettings):
-    app_name: str = "Gym Management System"
-    api_v1_prefix: str = "/api/v1"
-    database_url: str = "sqlite+pysqlite:///./gym.db"
-    secret_key: str = "change-this-in-production"
-    access_token_expire_minutes: int = 60 * 8
-
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+@dataclass(frozen=True)
+class Settings:
+    app_name: str = os.getenv("APP_NAME", "Gym Management System")
+    api_v1_prefix: str = os.getenv("API_V1_PREFIX", "/api/v1")
+    database_url: str = os.getenv(
+        "DATABASE_URL",
+        "postgresql+psycopg://postgres:123456@localhost:5432/gym_management",
+    )
+    secret_key: str = os.getenv("SECRET_KEY", "change-this-in-production")
+    access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(60 * 8)))
 
 
 @lru_cache
