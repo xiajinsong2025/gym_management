@@ -1,5 +1,7 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.api.v1.deps import require_permission
@@ -13,10 +15,14 @@ from app.models.personal_training import (
 )
 from app.schemas.common import ApiResponse, PageResponse
 from app.schemas.personal_training import (
+    CoachPerformanceSummary,
+    PersonalTrainingPackageRemaining,
     PersonalTrainingPackageCreate,
     PersonalTrainingPackageRead,
     PersonalTrainingPackageUpdate,
+    PersonalTrainingSessionCancelRequest,
     PersonalTrainingSessionCreate,
+    PersonalTrainingSessionRescheduleRequest,
     PersonalTrainingSessionRead,
     PersonalTrainingSessionUpdate,
 )
@@ -184,6 +190,7 @@ def consume_session(
 
     package.remaining_sessions -= 1
     session.training_record_id = training_record_id
+    session.note = f"{session.note or ''}\nconsumed_at={datetime.now(UTC).isoformat()}".strip()
     session.status = PersonalTrainingSessionStatus.CANCELLED
     if package.remaining_sessions == 0:
         package.status = "finished"
@@ -191,3 +198,112 @@ def consume_session(
     db.commit()
     db.refresh(session)
     return ApiResponse(data=PersonalTrainingSessionRead.model_validate(session))
+
+
+@router.post("/pt/sessions/{session_id}/reschedule", response_model=ApiResponse[PersonalTrainingSessionRead])
+def reschedule_session(
+    session_id: int,
+    payload: PersonalTrainingSessionRescheduleRequest,
+    db: Session = Depends(get_db),
+    _: object = Depends(require_permission("pt:write")),
+) -> ApiResponse[PersonalTrainingSessionRead]:
+    session = db.get(PersonalTrainingSession, session_id)
+    if session is None:
+        raise AppError("pt session not found", code=40442, status_code=404)
+    if session.status == PersonalTrainingSessionStatus.CANCELLED:
+        raise AppError("cancelled session cannot be rescheduled", code=40046, status_code=400)
+    if payload.end_time <= payload.start_time:
+        raise AppError("end_time must be later than start_time", code=40047, status_code=400)
+
+    session.start_time = payload.start_time
+    session.end_time = payload.end_time
+    session.note = payload.note if payload.note is not None else session.note
+    db.commit()
+    db.refresh(session)
+    return ApiResponse(data=PersonalTrainingSessionRead.model_validate(session))
+
+
+@router.post("/pt/sessions/{session_id}/cancel", response_model=ApiResponse[PersonalTrainingSessionRead])
+def cancel_session(
+    session_id: int,
+    payload: PersonalTrainingSessionCancelRequest,
+    db: Session = Depends(get_db),
+    _: object = Depends(require_permission("pt:write")),
+) -> ApiResponse[PersonalTrainingSessionRead]:
+    session = db.get(PersonalTrainingSession, session_id)
+    if session is None:
+        raise AppError("pt session not found", code=40442, status_code=404)
+    if session.status == PersonalTrainingSessionStatus.CANCELLED:
+        raise AppError("pt session already cancelled", code=40048, status_code=400)
+    session.status = PersonalTrainingSessionStatus.CANCELLED
+    session.note = payload.note if payload.note is not None else session.note
+    db.commit()
+    db.refresh(session)
+    return ApiResponse(data=PersonalTrainingSessionRead.model_validate(session))
+
+
+@router.get("/pt/packages/{package_id}/remaining", response_model=ApiResponse[PersonalTrainingPackageRemaining])
+def get_package_remaining(
+    package_id: int,
+    db: Session = Depends(get_db),
+    _: object = Depends(require_permission("pt:read")),
+) -> ApiResponse[PersonalTrainingPackageRemaining]:
+    package = db.get(PersonalTrainingPackage, package_id)
+    if package is None:
+        raise AppError("pt package not found", code=40441, status_code=404)
+    consumed = max(0, package.total_sessions - package.remaining_sessions)
+    return ApiResponse(
+        data=PersonalTrainingPackageRemaining(
+            package_id=package.id,
+            member_id=package.member_id,
+            total_sessions=package.total_sessions,
+            remaining_sessions=package.remaining_sessions,
+            consumed_sessions=consumed,
+        )
+    )
+
+
+@router.get("/pt/coaches/{coach_id}/performance", response_model=ApiResponse[CoachPerformanceSummary])
+def coach_performance(
+    coach_id: int,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    commission_rate: float = 0.3,
+    db: Session = Depends(get_db),
+    _: object = Depends(require_permission("pt:read")),
+) -> ApiResponse[CoachPerformanceSummary]:
+    clauses = [PersonalTrainingSession.coach_id == coach_id]
+    if start_at is not None:
+        clauses.append(PersonalTrainingSession.start_time >= start_at)
+    if end_at is not None:
+        clauses.append(PersonalTrainingSession.start_time <= end_at)
+
+    total_confirmed = db.scalar(
+        select(func.count()).select_from(PersonalTrainingSession).where(
+            and_(*clauses), PersonalTrainingSession.status == PersonalTrainingSessionStatus.CONFIRMED
+        )
+    ) or 0
+    total_consumed = db.scalar(
+        select(func.count()).select_from(PersonalTrainingSession).where(
+            and_(*clauses),
+            PersonalTrainingSession.status == PersonalTrainingSessionStatus.CANCELLED,
+            PersonalTrainingSession.note.ilike("%consumed_at=%"),
+        )
+    ) or 0
+
+    total_amount = db.scalar(
+        select(func.coalesce(func.sum(PersonalTrainingPackage.amount_cents), 0))
+        .select_from(PersonalTrainingPackage)
+        .where(PersonalTrainingPackage.coach_id == coach_id)
+    ) or 0
+    commission_amount = int(total_amount * max(0.0, min(1.0, commission_rate)))
+    return ApiResponse(
+        data=CoachPerformanceSummary(
+            coach_id=coach_id,
+            total_confirmed_sessions=int(total_confirmed),
+            total_consumed_sessions=int(total_consumed),
+            total_amount_cents=int(total_amount),
+            commission_rate=commission_rate,
+            commission_amount_cents=commission_amount,
+        )
+    )

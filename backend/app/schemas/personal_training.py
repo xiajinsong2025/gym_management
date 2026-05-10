@@ -74,3 +74,30 @@ class PersonalTrainingSessionRead(BaseModel):
     note: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class PersonalTrainingSessionRescheduleRequest(BaseModel):
+    start_time: datetime
+    end_time: datetime
+    note: str | None = None
+
+
+class PersonalTrainingSessionCancelRequest(BaseModel):
+    note: str | None = None
+
+
+class PersonalTrainingPackageRemaining(BaseModel):
+    package_id: int
+    member_id: int
+    total_sessions: int
+    remaining_sessions: int
+    consumed_sessions: int
+
+
+class CoachPerformanceSummary(BaseModel):
+    coach_id: int
+    total_confirmed_sessions: int
+    total_consumed_sessions: int
+    total_amount_cents: int
+    commission_rate: float
+    commission_amount_cents: int

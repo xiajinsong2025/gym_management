@@ -17,4 +17,5 @@ export interface PtSession {
   start_time: string
   end_time: string
   status: 'scheduled' | 'confirmed' | 'cancelled'
+  note?: string | null
 }
