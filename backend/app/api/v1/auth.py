@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.v1.deps import get_current_user
@@ -87,3 +88,22 @@ def grant_my_permissions(
 
     db.commit()
     return ApiResponse(data=granted)
+
+
+@router.get("/me/permissions", response_model=ApiResponse[list[str]])
+def get_my_permissions(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ApiResponse[list[str]]:
+    if user.is_superuser:
+        codes = db.scalars(select(Permission.code).order_by(Permission.code.asc())).all()
+        return ApiResponse(data=list(codes))
+
+    rows = db.execute(
+        select(Permission.code)
+        .join(role_permissions, role_permissions.c.permission_id == Permission.id)
+        .join(user_roles, user_roles.c.role_id == role_permissions.c.role_id)
+        .where(user_roles.c.user_id == user.id)
+        .order_by(Permission.code.asc())
+    ).all()
+    return ApiResponse(data=[row[0] for row in rows])

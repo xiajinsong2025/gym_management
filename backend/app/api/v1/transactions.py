@@ -44,6 +44,23 @@ def create_card_type(
     return ApiResponse(data=CardTypeRead.model_validate(card_type))
 
 
+@router.get("/card-types", response_model=ApiResponse[PageResponse[CardTypeRead]])
+def list_card_types(
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    _: object = Depends(require_permission("transactions:read")),
+) -> ApiResponse[PageResponse[CardTypeRead]]:
+    page = max(1, page)
+    page_size = max(1, min(page_size, 100))
+    total = db.scalar(select(func.count()).select_from(CardType)) or 0
+    records = db.scalars(
+        select(CardType).order_by(CardType.id.desc()).offset((page - 1) * page_size).limit(page_size)
+    ).all()
+    items = [CardTypeRead.model_validate(record) for record in records]
+    return ApiResponse(data=PageResponse(items=items, total=total, page=page, page_size=page_size))
+
+
 @router.post("/member-cards/open", response_model=ApiResponse[MemberCardRead])
 def open_card(
     payload: OpenCardRequest,
