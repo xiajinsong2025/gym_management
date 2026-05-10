@@ -1,6 +1,6 @@
 # 健身房管理系统
 
-基于 FastAPI + SQLAlchemy + Vue 3 + Vuetify 3 的单店健身房管理系统。
+基于 FastAPI + SQLAlchemy + Vue 3 + Element Plus 的单店健身房管理系统。
 
 ## 项目结构
 
@@ -38,11 +38,30 @@ Gym_Mangement/
 ### 前端
 - Vue 3
 - Vite
-- Vuetify 3 (Material Design)
+- Element Plus
 - TypeScript
 - Pinia (状态管理)
 - Vue Router
 - Axios
+
+## Docker 部署（推荐服务器使用）
+
+项目已提供：
+
+- `docker-compose.yml`
+- `backend/Dockerfile`
+- `frontend/Dockerfile`
+- `frontend/nginx.conf`
+
+一键启动：
+
+```bash
+docker compose up -d --build
+```
+
+详细步骤见：
+
+- [docs/deploy-docker.md](/Users/xiajingsong/Documents/code/Gym_Mangement/docs/deploy-docker.md)
 
 ## 快速开始
 
