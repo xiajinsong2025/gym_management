@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.deps import require_permission
 from app.core.database import get_db
 from app.core.errors import AppError
-from app.models.front_desk import BraceletRecord, BraceletStatus, Checkin, CheckinStatus
+from app.models.front_desk import BraceletRecord, BraceletStatus, Checkin, CheckinChannel, CheckinStatus
 from app.models.member import Member
 from app.schemas.common import ApiResponse, PageResponse
 from app.schemas.front_desk import (
@@ -16,6 +16,7 @@ from app.schemas.front_desk import (
     BraceletReturnRequest,
     CheckinCreate,
     CheckinRead,
+    FrontDeskRealtimeStats,
     CheckoutRequest,
 )
 
@@ -28,18 +29,26 @@ def create_checkin(
     db: Session = Depends(get_db),
     _: object = Depends(require_permission("frontdesk:write")),
 ) -> ApiResponse[CheckinRead]:
-    member = db.get(Member, payload.member_id)
-    if member is None:
-        raise AppError("member not found", code=40401, status_code=404)
+    if payload.is_visitor:
+        if not payload.visitor_name:
+            raise AppError("visitor name is required", code=40054, status_code=400)
+    else:
+        if payload.member_id is None:
+            raise AppError("member_id is required", code=40055, status_code=400)
+        member = db.get(Member, payload.member_id)
+        if member is None:
+            raise AppError("member not found", code=40401, status_code=404)
 
-    active = db.scalar(
-        select(Checkin).where(Checkin.member_id == payload.member_id, Checkin.status == CheckinStatus.ACTIVE).limit(1)
-    )
-    if active is not None:
-        raise AppError("member already checked in", code=40051, status_code=400)
+        active = db.scalar(
+            select(Checkin).where(Checkin.member_id == payload.member_id, Checkin.status == CheckinStatus.ACTIVE).limit(1)
+        )
+        if active is not None:
+            raise AppError("member already checked in", code=40051, status_code=400)
 
+    checkin_data = payload.model_dump()
+    checkin_data["channel"] = payload.channel if not payload.is_visitor else CheckinChannel.VISITOR
     checkin = Checkin(
-        **payload.model_dump(),
+        **checkin_data,
         checkin_time=datetime.now(UTC),
         status=CheckinStatus.ACTIVE,
     )
@@ -175,3 +184,28 @@ def list_bracelet_records(
     ).all()
     items = [BraceletRecordRead.model_validate(it) for it in records]
     return ApiResponse(data=PageResponse(items=items, total=total or 0, page=page, page_size=page_size))
+
+
+@router.get("/frontdesk/realtime", response_model=ApiResponse[FrontDeskRealtimeStats])
+def realtime_stats(
+    db: Session = Depends(get_db),
+    _: object = Depends(require_permission("frontdesk:read")),
+) -> ApiResponse[FrontDeskRealtimeStats]:
+    today = datetime.now(UTC).date()
+    active_member_checkins = db.scalar(
+        select(func.count()).select_from(Checkin).where(Checkin.status == CheckinStatus.ACTIVE, Checkin.is_visitor == False)  # noqa: E712
+    ) or 0
+    active_visitor_checkins = db.scalar(
+        select(func.count()).select_from(Checkin).where(Checkin.status == CheckinStatus.ACTIVE, Checkin.is_visitor == True)  # noqa: E712
+    ) or 0
+    today_checkins = db.scalar(
+        select(func.count()).select_from(Checkin).where(func.date(Checkin.checkin_time) == today)
+    ) or 0
+    return ApiResponse(
+        data=FrontDeskRealtimeStats(
+            in_venue_count=active_member_checkins + active_visitor_checkins,
+            today_checkins=today_checkins,
+            active_member_checkins=active_member_checkins,
+            active_visitor_checkins=active_visitor_checkins,
+        )
+    )

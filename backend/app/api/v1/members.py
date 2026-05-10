@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -5,7 +7,10 @@ from sqlalchemy.orm import Session
 from app.api.v1.deps import require_permission
 from app.core.database import get_db
 from app.core.errors import AppError
+from app.models.card import CardTransaction, MemberCard
+from app.models.front_desk import Checkin
 from app.models.member import Member, MemberFeedback, MemberFollowup, MemberProfile, TrainingRecord
+from app.models.personal_training import PersonalTrainingPackage
 from app.schemas.common import ApiResponse, PageResponse
 from app.schemas.member import (
     MemberCreate,
@@ -280,6 +285,83 @@ def update_member_feedback(
     db.commit()
     db.refresh(feedback)
     return ApiResponse(data=MemberFeedbackRead.model_validate(feedback))
+
+
+@router.get("/reminders/expiring", response_model=ApiResponse[list[MemberRead]])
+def expiring_members(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    _: object = Depends(require_permission("members:read")),
+) -> ApiResponse[list[MemberRead]]:
+    days = max(1, min(days, 90))
+    to_date = datetime.now(UTC).date() + timedelta(days=days)
+    member_ids = db.scalars(
+        select(MemberCard.member_id).where(MemberCard.end_date.is_not(None), MemberCard.end_date <= to_date)
+    ).all()
+    if not member_ids:
+        return ApiResponse(data=[])
+    rows = db.scalars(select(Member).where(Member.id.in_(member_ids)).order_by(Member.id.desc())).all()
+    return ApiResponse(data=[MemberRead.model_validate(r) for r in rows])
+
+
+@router.get("/reminders/birthday", response_model=ApiResponse[list[MemberRead]])
+def birthday_members(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    _: object = Depends(require_permission("members:read")),
+) -> ApiResponse[list[MemberRead]]:
+    days = max(1, min(days, 31))
+    today = datetime.now(UTC).date()
+    target_days = {(today + timedelta(days=i)).strftime("%m-%d") for i in range(days + 1)}
+    rows = db.scalars(select(Member).where(Member.birthday.is_not(None))).all()
+    hit = [r for r in rows if r.birthday and r.birthday.strftime("%m-%d") in target_days]
+    return ApiResponse(data=[MemberRead.model_validate(r) for r in sorted(hit, key=lambda x: x.id, reverse=True)])
+
+
+@router.get("/reminders/dormant", response_model=ApiResponse[list[MemberRead]])
+def dormant_members(
+    days: int = 30,
+    db: Session = Depends(get_db),
+    _: object = Depends(require_permission("members:read")),
+) -> ApiResponse[list[MemberRead]]:
+    days = max(7, min(days, 365))
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    active_ids = set(db.scalars(select(Checkin.member_id).where(Checkin.checkin_time >= cutoff, Checkin.member_id.is_not(None))).all())
+    rows = db.scalars(select(Member).order_by(Member.id.desc())).all()
+    dormant = [r for r in rows if r.id not in active_ids]
+    return ApiResponse(data=[MemberRead.model_validate(r) for r in dormant])
+
+
+@router.get("/{member_id}/timeline", response_model=ApiResponse[dict[str, int]])
+def member_timeline_summary(
+    member_id: int,
+    db: Session = Depends(get_db),
+    _: object = Depends(require_permission("members:read")),
+) -> ApiResponse[dict[str, int]]:
+    member = db.get(Member, member_id)
+    if member is None:
+        raise AppError("member not found", code=40401, status_code=404)
+
+    card_count = db.scalar(select(func.count()).select_from(MemberCard).where(MemberCard.member_id == member_id)) or 0
+    consume_count = db.scalar(
+        select(func.count()).select_from(CardTransaction).where(CardTransaction.member_id == member_id)
+    ) or 0
+    checkin_count = db.scalar(select(func.count()).select_from(Checkin).where(Checkin.member_id == member_id)) or 0
+    pt_purchase_count = db.scalar(
+        select(func.count()).select_from(PersonalTrainingPackage).where(PersonalTrainingPackage.member_id == member_id)
+    ) or 0
+    followup_count = db.scalar(
+        select(func.count()).select_from(MemberFollowup).where(MemberFollowup.member_id == member_id)
+    ) or 0
+    return ApiResponse(
+        data={
+            "card_records": int(card_count),
+            "consume_records": int(consume_count),
+            "checkin_records": int(checkin_count),
+            "pt_purchase_records": int(pt_purchase_count),
+            "followup_records": int(followup_count),
+        }
+    )
 
 
 @router.post("/{member_id}/training-records", response_model=ApiResponse[TrainingRecordRead])

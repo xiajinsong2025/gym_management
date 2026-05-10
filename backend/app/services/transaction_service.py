@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -29,6 +29,22 @@ def open_member_card(db: Session, payload: OpenCardRequest) -> MemberCard:
     card_type = db.get(CardType, payload.card_type_id)
     if card_type is None:
         raise AppError("card type not found", code=40402, status_code=404)
+    if not card_type.is_active:
+        raise AppError("card type is inactive", code=40046, status_code=400)
+
+    today = date.today()
+    if card_type.sale_start_at is not None and today < card_type.sale_start_at:
+        raise AppError("card type sale has not started", code=40047, status_code=400)
+    if card_type.sale_end_at is not None and today > card_type.sale_end_at:
+        raise AppError("card type sale has ended", code=40048, status_code=400)
+
+    if card_type.purchase_limit is not None and card_type.purchase_limit > 0:
+        purchased_count = db.query(MemberCard).filter(
+            MemberCard.member_id == payload.member_id,
+            MemberCard.card_type_id == payload.card_type_id,
+        ).count()
+        if purchased_count >= card_type.purchase_limit:
+            raise AppError("card type purchase limit reached", code=40049, status_code=400)
 
     order = Order(
         order_no=_new_no("ORD"),
@@ -52,7 +68,7 @@ def open_member_card(db: Session, payload: OpenCardRequest) -> MemberCard:
         start_date=payload.start_date,
         end_date=payload.end_date,
         remaining_times=payload.remaining_times,
-        balance_cents=payload.balance_cents,
+        balance_cents=(payload.balance_cents or 0) + (card_type.gift_amount_cents or 0),
         remark=payload.remark,
     )
     db.add(card)

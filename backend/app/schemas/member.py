@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.member import Gender, MemberStatus
+from app.models.member import Gender, MemberStatus, MemberType
 
 
 class MemberCreate(BaseModel):
@@ -11,6 +11,11 @@ class MemberCreate(BaseModel):
     member_no: str | None = None
     gender: Gender = Gender.UNKNOWN
     birthday: date | None = None
+    member_type: MemberType = MemberType.REGULAR
+    id_card_no: str | None = None
+    wechat: str | None = None
+    address: str | None = None
+    tags: str | None = None
     source: str | None = None
     remark: str | None = None
 
@@ -24,6 +29,11 @@ class MemberRead(BaseModel):
     member_no: str | None
     gender: Gender
     birthday: date | None
+    member_type: MemberType
+    id_card_no: str | None
+    wechat: str | None
+    address: str | None
+    tags: str | None
     status: MemberStatus
     source: str | None
     remark: str | None
@@ -37,6 +47,11 @@ class MemberUpdate(BaseModel):
     member_no: str | None = None
     gender: Gender | None = None
     birthday: date | None = None
+    member_type: MemberType | None = None
+    id_card_no: str | None = None
+    wechat: str | None = None
+    address: str | None = None
+    tags: str | None = None
     status: MemberStatus | None = None
     source: str | None = None
     remark: str | None = None
@@ -44,6 +59,8 @@ class MemberUpdate(BaseModel):
 
 class MemberProfileUpsert(BaseModel):
     avatar_url: str | None = None
+    id_card_front_url: str | None = None
+    id_card_back_url: str | None = None
     emergency_contact: str | None = None
     emergency_phone: str | None = None
     height_cm: int | None = None
@@ -57,6 +74,8 @@ class MemberProfileRead(BaseModel):
     id: int
     member_id: int
     avatar_url: str | None
+    id_card_front_url: str | None
+    id_card_back_url: str | None
     emergency_contact: str | None
     emergency_phone: str | None
     height_cm: int | None

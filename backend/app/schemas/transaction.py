@@ -27,6 +27,12 @@ class CardTypeCreate(BaseModel):
     validity_days: int | None = None
     total_times: int | None = None
     stored_value_cents: int | None = None
+    gift_amount_cents: int = 0
+    purchase_limit: int | None = None
+    applicable_venue_ids: str | None = None
+    sale_start_at: date | None = None
+    sale_end_at: date | None = None
+    package_kind: str | None = None
     is_active: bool = True
     description: str | None = None
 
@@ -41,6 +47,12 @@ class CardTypeRead(BaseModel):
     validity_days: int | None
     total_times: int | None
     stored_value_cents: int | None
+    gift_amount_cents: int
+    purchase_limit: int | None
+    applicable_venue_ids: str | None
+    sale_start_at: date | None
+    sale_end_at: date | None
+    package_kind: str | None
     is_active: bool
     description: str | None
     created_at: datetime

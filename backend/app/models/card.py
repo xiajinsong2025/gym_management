@@ -43,6 +43,12 @@ class CardType(TimestampMixin, Base):
     validity_days: Mapped[int | None] = mapped_column(Integer)
     total_times: Mapped[int | None] = mapped_column(Integer)
     stored_value_cents: Mapped[int | None] = mapped_column(Integer)
+    gift_amount_cents: Mapped[int] = mapped_column(Integer, default=0)
+    purchase_limit: Mapped[int | None] = mapped_column(Integer)
+    applicable_venue_ids: Mapped[str | None] = mapped_column(String(255))
+    sale_start_at: Mapped[date | None] = mapped_column(Date)
+    sale_end_at: Mapped[date | None] = mapped_column(Date)
+    package_kind: Mapped[str | None] = mapped_column(String(40), index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     description: Mapped[str | None] = mapped_column(Text)
 
